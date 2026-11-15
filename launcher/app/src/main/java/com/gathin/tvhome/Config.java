@@ -687,8 +687,13 @@ final class Config {
         // A theme can also switch the wallpaper off while the file is still there.
         boolean wallpaperEnabled = json == null || bool(json, "wallpaper", true);
         if (!wallpaperEnabled) wallpaper = null;
-        int rotationMinutes = json == null ? 0 : integer(json, "wallpaper_rotation_minutes", 0, 0, 1440);
-        int wallpaperDim = json == null ? 0 : integer(json, "wallpaper_dim", 0, 0, 90);
+        // Local Bing addition: with bing_wallpapers on, the collection rotates and dims by default even with no theme.
+        boolean bing = res.getBoolean(R.bool.bing_wallpapers);
+        int defaultRotation = bing ? res.getInteger(R.integer.bing_rotation_minutes) : 0;
+        int defaultDim = bing ? res.getInteger(R.integer.bing_dim) : 0;
+        int rotationMinutes = json == null ? defaultRotation
+                : integer(json, "wallpaper_rotation_minutes", defaultRotation, 0, 1440);
+        int wallpaperDim = json == null ? defaultDim : integer(json, "wallpaper_dim", defaultDim, 0, 90);
         int dockOpacity = json == null ? 100 : integer(json, "dock_opacity", 100, 30, 100);
         dockOpacity = chosenDockOpacity(choices.getInt(DOCK_OPACITY_KEY, -1), dockOpacity);
         clockFormat = choices.getString(CLOCK_FORMAT_KEY, clockFormat);

@@ -17,10 +17,11 @@
 
     <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
     <string-array name="dock_apps">
-        <item>com.netflix.ninja</item>
-        <item>com.amazon.amazonvideo.livingroom</item>
-        <item>com.google.android.youtube.tv</item>
-        <item>in.startv.hotstar</item>
+        <item>com.smarterspro.smartersprotv</item>
+        <item>org.smarttube.stable</item>
+        <item>com.anthonyessaye.opentv</item>
+        <item>com.spotify.tv.android</item>
+        <item>com.dvbfinder.dvbplayer</item>
     </string-array>
     <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
          the first grid apps, so the dock never shows a gap. false leaves them empty (#162); a theme can
@@ -34,7 +35,7 @@
     </string-array>
 
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
-    <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
+    <string name="live_tv_package" translatable="false">com.tcl.tv</string>
 
     <!-- Open the Live TV app above the first time Home comes up after the TV is switched on, for sets that are
          mostly used for broadcast TV. Once per boot: Home after that stays Home. Can also be set with
@@ -92,6 +93,7 @@
     <!-- A tile's artwork instead of the app's banner: "package=drawable", a banner_* drawable bundled with the
          launcher (res/drawable). banner_tv is a magenta field with the Live TV glyph. -->
     <string-array name="app_banners">
+        <item>com.dvbfinder.dvbplayer=banner_dvbplayer</item>
     </string-array>
 
     <!-- TVs with no TvInputManager have no HDMI list to read, but their own source-selection panel
@@ -182,6 +184,7 @@
          a temporary `Log.d` in the helper's `onKeyEvent`: `getKeyCode()`, `getScanCode()`, `getDeviceId()`, read
          after a HOME_KEY_SERVICE=1 rebuild. Leave empty to omit. -->
     <integer-array name="settings_key_keycodes">
+        <item>83</item>
     </integer-array>
     <!-- What those Settings buttons open: false, the TV's Settings; true, a small glass panel at the top right
          with TV settings, Display, Network, Apps (re-enable an app) and Launcher settings, over whatever is on screen.
@@ -242,6 +245,10 @@
          where the firmware hands KEYCODE_GUIDE (172) to the stock launcher and no app ever receives it. Leave empty
          to omit. -->
     <string-array name="app_keys" translatable="false">
+        <item>scan:242:com.smarterspro.smartersprotv</item>
+        <item>scan:245:org.smarttube.stable</item>
+        <item>scan:752:net.mbc.shahidTV</item>
+        <item>scan:365:com.tcl.tv</item>
     </string-array>
 
     <!-- Package of the stock launcher, for TVs whose firmware turns it back on after it was disabled. XGIMI's
@@ -418,7 +425,7 @@
 
     <!-- Tiles per row in the grid; the dock always has this many slots. Tiles are 180dp wide at 4 columns and
          shrink to fit from 5 up (about 144dp at 5, 117dp at 6 on a 1080p TV). -->
-    <integer name="columns">4</integer>
+    <integer name="columns">5</integer>
 
     <!-- Basic motion is on; advanced effects are opt-in in the launcher's own Settings screen. -->
     <bool name="animations">true</bool>
@@ -447,6 +454,7 @@
          (many China-market TVs, e.g. Coocaa 8R145), a fresh Home with app_library on would otherwise be
          nearly empty. Empty (off) by default, so existing setups change nothing. -->
     <string-array name="library_apps" translatable="false">
+        <item>com.dvbfinder.dvbplayer</item>
     </string-array>
 
     <!-- Packages the App library catalogue never offers, even with app_library on (config.xml
@@ -493,8 +501,21 @@
     <!-- Where the TV is, in decimal degrees, so the sky's sunrise and sunset glows follow the real sun
          (computed on the TV, no network). Empty: a fixed temperate day, sunset glow around 19:00.
          Vilnius: 54.69 and 25.28. -->
-    <string name="latitude" translatable="false"></string>
-    <string name="longitude" translatable="false"></string>
+    <string name="latitude" translatable="false">33.89</string>
+    <string name="longitude" translatable="false">35.50</string>
+
+    <!-- Local additions (not upstream). bing_wallpapers: download Bing's recent daily images into wallpapers/ and rotate
+         them (needs INTERNET); rotation and dim are the defaults when no theme sets wallpaper_rotation_minutes or
+         wallpaper_dim. top_weather: the temperature and conditions above the date, from Open-Meteo for latitude and
+         longitude above; weather_fahrenheit for degrees F. -->
+    <bool name="bing_wallpapers">true</bool>
+    <string name="bing_market" translatable="false">en-US</string>
+    <integer name="bing_rotation_minutes">30</integer>
+    <integer name="bing_dim">35</integer>
+    <bool name="top_weather">true</bool>
+    <bool name="weather_fahrenheit">false</bool>
+    <!-- OK on the weather line opens this app (the Weather add-on); empty or missing makes the line plain text. -->
+    <string name="weather_app" translatable="false">io.github.sumyabazar1.weather</string>
 
     <!-- Cinematic top shelf: the focused dock app's artwork, softened, fills the top of the screen in its
          colour; the shelf gets a larger name, a "Last opened" line (from the apps Home opened) and dock position

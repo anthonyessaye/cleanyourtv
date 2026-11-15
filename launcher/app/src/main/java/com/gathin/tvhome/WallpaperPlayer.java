@@ -35,6 +35,8 @@ final class WallpaperPlayer {
     private final ImageView image;
     private final int backgroundColor;
     private final List<File> files;
+    /** config wallpaperEnabled, kept for replaceFiles (local Bing addition). */
+    private final boolean enabled;
     private final long interval;
     private final String order;
     private final SharedPreferences preferences;
@@ -66,6 +68,7 @@ final class WallpaperPlayer {
         this.root = root;
         backgroundColor = config.backgroundColor;
         files = new ArrayList<>(config.wallpapers);
+        enabled = config.wallpaperEnabled;
         interval = config.wallpaperRotationMinutes * 60_000L;
         bitmapConfig = config.wallpaperTrueColor ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565;
         // The dim is painted into the picture (decode), so no full-screen shade layer is drawn on every frame.
@@ -157,6 +160,22 @@ final class WallpaperPlayer {
             sun = WallpaperMood.sun(sunDay, latitude, longitude, ZoneId.systemDefault());
         }
         return WallpaperMood.select(files, moods, WallpaperMood.timeOfDay(now.getHour() * 60 + now.getMinute(), sun[0], sun[1]));
+    }
+
+    /**
+     * Local addition: the collection changed on disk (BingWallpapers). Swaps in the new files without rebuilding Home;
+     * the picture on screen stays until the rotation is due, or is replaced at once when its file is gone.
+     */
+    void replaceFiles(List<File> fresh) {
+        if (closed || !enabled || fresh.isEmpty()) return;
+        files.clear();
+        files.addAll(fresh);
+        if (image.getParent() == null) {
+            root.addView(image, 0, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            showFirst();
+        }
+        update();
     }
 
     void close() {
@@ -290,7 +309,16 @@ final class WallpaperPlayer {
             options.inMutable = dimColor != 0;
             Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
             if (decoded == null) return null;
-            if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
+            if (dimColor != 0) {
+                Canvas canvas = new Canvas(decoded);
+                canvas.drawColor(dimColor);
+                // Local addition: a soft shade behind the clock, date and weather, for busy photos (Bing).
+                int h = decoded.getHeight(), shade = Math.round(h * 0.38f);
+                android.graphics.Paint paint = new android.graphics.Paint();
+                paint.setShader(new android.graphics.LinearGradient(0, 0, 0, shade,
+                        0xA0000000, 0x00000000, android.graphics.Shader.TileMode.CLAMP));
+                canvas.drawRect(0, 0, decoded.getWidth(), shade, paint);
+            }
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
             // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
             Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);

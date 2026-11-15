@@ -145,6 +145,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private RecyclerView grid;
     private FrameLayout root;
     private WallpaperPlayer wallpaperPlayer;
+    /** Local addition: weather above the date (TopWeather); null when top_weather is off or no location is set. */
+    private TopWeather topWeather;
     private GlassView glass;
     private View ambient;
     private TextView heroName;
@@ -446,6 +448,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (festive) updateWifiLabel();
             sky.update();
             wallpaperPlayer.update();
+            refreshBing();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -513,6 +516,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
+        String lat = getString(R.string.latitude).trim(), lon = getString(R.string.longitude).trim();
+        if (getResources().getBoolean(R.bool.top_weather) && !lat.isEmpty() && !lon.isEmpty()) {
+            topWeather = new TopWeather(this, findViewById(R.id.weatherLine), lat, lon,
+                    getResources().getBoolean(R.bool.weather_fahrenheit));
+        }
         sky = findViewById(R.id.sky);
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
@@ -911,9 +919,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int firstButton = btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : firstTopButton().getId();
             int leftButton = rtlMenuBar ? R.id.btnSettings : firstButton;
             int rightButton = rtlMenuBar ? firstButton : R.id.btnSettings;
+            // Local addition: Left from the first pill reaches the weather line when it is shown and opens an app.
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && v.getId() == leftButton && !rtlMenuBar && weatherLineFocusable()) {
+                findViewById(R.id.weatherLine).requestFocus();
+                return true;
+            }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return v.getId() == leftButton;
             return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == rightButton;
         };
+        setUpWeatherLine(btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton());
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
         btnVpn.setOnKeyListener(pillKeys);
@@ -1140,6 +1154,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (gameDay != null) gameDay.start();
         sky.update();
         wallpaperPlayer.start();
+        if (topWeather != null) topWeather.start();
+        refreshBing();
         handler.postDelayed(minuteTick, MINUTE_MS);
         if (festive && lamp != null) {
             lamp.start();
@@ -1303,6 +1319,76 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (resumed && idleClockMs > 0) root.postDelayed(showIdleClock, idleClockMs);
     }
 
+    /** Local addition: the weather line's launch intent, or null when there is no weather app to open. */
+    private Intent weatherIntent() {
+        String pkg = getString(R.string.weather_app).trim();
+        if (pkg.isEmpty()) return null;
+        Intent i = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+        return i != null ? i : getPackageManager().getLaunchIntentForPackage(pkg);
+    }
+
+    private boolean weatherLineFocusable() {
+        View line = findViewById(R.id.weatherLine);
+        return line != null && line.getVisibility() == View.VISIBLE && line.isFocusable();
+    }
+
+    /**
+     * Local addition: OK on the weather line opens the Weather app; Right goes back to the first pill, Down to the
+     * dock, and Up or Left stay put, like the pills' own ends.
+     */
+    private void setUpWeatherLine(View firstPill) {
+        View line = findViewById(R.id.weatherLine);
+        if (line == null) return;
+        boolean opens = weatherIntent() != null;
+        // The focused pill reaches 10dp left of the text (negative margin): let the date column and the clock row draw it.
+        for (android.view.ViewParent p = line.getParent(); p instanceof ViewGroup && p != root; p = p.getParent()) {
+            ((ViewGroup) p).setClipChildren(false);
+            ((ViewGroup) p).setClipToPadding(false);
+        }
+        line.setFocusable(opens);
+        line.setClickable(opens);
+        if (!opens) return;
+        line.setOnClickListener(v -> {
+            Intent i = weatherIntent();
+            if (i == null) return;
+            try {
+                startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (ActivityNotFoundException | SecurityException e) {
+                android.util.Log.w("TvHome.Weather", "cannot open weather app: " + e);
+            }
+        });
+        line.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    firstPill.requestFocus();
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    return true;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    /** Local addition: fetch Bing's recent images when due, and hand a changed collection to the wallpaper player. */
+    private void refreshBing() {
+        if (!getResources().getBoolean(R.bool.bing_wallpapers)) return;
+        BingWallpapers.refreshIfDue(this, getString(R.string.bing_market), () -> {
+            if (isDestroyed() || isFinishing()) return;
+            // A picture chosen in Launcher settings stays: the owner pinned it.
+            if (getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
+                    .getString(Config.WALLPAPER_CHOICE_KEY, null) != null) return;
+            File dir = Config.dir(this);
+            if (dir == null) return;
+            wallpaperPlayer.replaceFiles(WallpaperRotation.images(new File(dir, ThemeFiles.WALLPAPERS)));
+        });
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -1314,6 +1400,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.removeCallbacks(showIdleClock);
         endReorder();   // Home or another app while reordering keeps the order so far
         wallpaperPlayer.stop();
+        if (topWeather != null) topWeather.stop();
         stopAmbientAnimation();
         hero.animate().cancel();
         ambient.animate().cancel();
@@ -1394,6 +1481,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         unregisterReceiver(packageReceiver);
         if (openOnStartOnWake) unregisterReceiver(wakeReceiver);
         wallpaperPlayer.close();
+        if (topWeather != null) topWeather.close();
         ConnectivityManager cm = getApplicationContext().getSystemService(ConnectivityManager.class);   // as registered
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
